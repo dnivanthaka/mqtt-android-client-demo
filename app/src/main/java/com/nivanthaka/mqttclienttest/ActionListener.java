@@ -29,7 +29,7 @@ public class ActionListener implements IMqttActionListener {
 
     @Override
     public void onSuccess(IMqttToken asyncActionToken){
-        Toast.makeText(context, asyncActionToken.toString(), Toast.LENGTH_SHORT).show();
+        //Toast.makeText(context, asyncActionToken.toString(), Toast.LENGTH_SHORT).show();
 
         switch(action){
             case CONNECT:
@@ -57,14 +57,16 @@ public class ActionListener implements IMqttActionListener {
 
     public void onConnect(IMqttToken asyncActionToken){
         Log.d(TAG, "onConnect");
+        Toast.makeText(context, "Successfully Connected", Toast.LENGTH_SHORT).show();
 
         connection.setStatus(Connection.ConnectionStatus.CONNECTED);
     }
 
     public void onSubscribe(IMqttToken asyncActionToken){
         Log.d(TAG, "onSubscribe");
+        Toast.makeText(context, "Successfully Subscribed", Toast.LENGTH_SHORT).show();
 
-        asyncActionToken.getClient().setCallback(new MqttCallbackHandler());
+        asyncActionToken.getClient().setCallback(new MqttCallbackHandler(context));
     }
 
     public void onUnsubscribe(IMqttToken asyncActionToken){
@@ -77,7 +79,7 @@ public class ActionListener implements IMqttActionListener {
 
     @Override
     public void onFailure(IMqttToken asyncActionToken, Throwable exception){
-        Toast.makeText(context, asyncActionToken.toString(), Toast.LENGTH_SHORT).show();
+        //Toast.makeText(context, asyncActionToken.toString(), Toast.LENGTH_SHORT).show();
 
         switch(action){
             case CONNECT:
