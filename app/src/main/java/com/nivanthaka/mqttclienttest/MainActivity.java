@@ -9,6 +9,7 @@ import android.util.Log;
 import android.view.View;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.widget.Toast;
 
 import org.eclipse.paho.android.service.MqttAndroidClient;
 import org.eclipse.paho.client.mqttv3.IMqttActionListener;
@@ -16,12 +17,16 @@ import org.eclipse.paho.client.mqttv3.IMqttToken;
 import org.eclipse.paho.client.mqttv3.MqttClient;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
 import org.eclipse.paho.client.mqttv3.MqttException;
+import org.eclipse.paho.client.mqttv3.MqttMessage;
+
+import java.io.UnsupportedEncodingException;
 
 //http://www.hivemq.com/blog/mqtt-client-library-enyclopedia-paho-android-service
 public class MainActivity extends AppCompatActivity {
 
     private final String TAG = "MQTT_CLIENT";
-    private MqttAndroidClient client;
+    //private MqttAndroidClient client;
+    private Connection connection;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -38,7 +43,11 @@ public class MainActivity extends AppCompatActivity {
                         .setAction("Action", null).show();
             }
         });
+
+        connection = Connection.getInstance();
     }
+
+
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
@@ -67,47 +76,64 @@ public class MainActivity extends AppCompatActivity {
         //tcp://broker.hivemq.com:1883
 
         String clientId = MqttClient.generateClientId();
-        client = new MqttAndroidClient(this.getApplicationContext(), "tcp://broker.hivemq.com:1883",
-                        clientId);
+        /*client = new MqttAndroidClient(this.getApplicationContext(), "tcp://broker.hivemq.com:1883",
+                        clientId);*/
+        connection.createConnection(clientId, "broker.hivemq.com", 1883, null, this.getApplicationContext(), false);
+        MqttAndroidClient client = connection.getClient();
 
         MqttConnectOptions options = new MqttConnectOptions();
         //Last will message
         String topic = "users/last/will";
         byte[] payload = "some payload".getBytes();
-        options.setWill(topic, payload ,1,false);
+        options.setWill(topic, payload, 1, false);
 
         try {
             IMqttToken token = client.connect(options);
-            token.setActionCallback(new IMqttActionListener() {
+            connection.setStatus(Connection.ConnectionStatus.CONNECTING);
+
+            ActionListener listener = new ActionListener(connection, ActionListener.Action.CONNECT, this.getApplicationContext());
+            token.setActionCallback(listener);
+
+            /*token.setActionCallback(new IMqttActionListener() {
                 @Override
                 public void onSuccess(IMqttToken asyncActionToken) {
                     // We are connected
                     Log.d(TAG, "onSuccess");
+                    Toast.makeText(getApplicationContext(), "Successfully Connected", Toast.LENGTH_SHORT).show();
 
+                    mqttSubscribe();
+
+                    asyncActionToken.getClient().setCallback(new MqttCallbackHandler());
                 }
 
                 @Override
                 public void onFailure(IMqttToken asyncActionToken, Throwable exception) {
                     // Something went wrong e.g. connection timeout or firewall problems
                     Log.d(TAG, "onFailure");
-
+                    Toast.makeText(getApplicationContext(), "Cannot Connect to the Server", Toast.LENGTH_SHORT).show();
                 }
-            });
+            });*/
         } catch (MqttException e) {
             e.printStackTrace();
         }
     }
 
-    public void mqttSubscribe(){
-        String topic = "foo/bar";
+    public void mqttSubscribe(View view){
+        final String topic = "dinu/bar";
         int qos = 1;
-
-        try {
-            IMqttToken subToken = client.subscribe(topic, qos);
-            subToken.setActionCallback(new IMqttActionListener() {
+        MqttAndroidClient client;
+        client = connection.getClient();
+        //Log.d(TAG, client.toString());
+        if(connection.isConnected()) {
+            try {
+                IMqttToken subToken = client.subscribe(topic, qos);
+                ActionListener listener = new ActionListener(connection, ActionListener.Action.SUBSCRIBE, this.getApplicationContext());
+                subToken.setActionCallback(listener);
+            /*subToken.setActionCallback(new IMqttActionListener() {
                 @Override
                 public void onSuccess(IMqttToken asyncActionToken) {
                     // The message was published
+                    Toast.makeText(getApplicationContext(), "Successfully Subscribed to Topic " + topic, Toast.LENGTH_SHORT).show();
                 }
 
                 @Override
@@ -117,16 +143,28 @@ public class MainActivity extends AppCompatActivity {
                     // authorized to subscribe on the specified topic e.g. using wildcards
 
                 }
-            });
-        } catch (MqttException e) {
-            e.printStackTrace();
+            });*/
+            } catch (MqttException e) {
+                e.printStackTrace();
+            }
+        }else{
+            Log.d(TAG, "Client is still not connected");
         }
     }
 
-    public void mqttUnsubscribe(){
-        final String topic = "foo/bar";
+    public void mqttUnsubscribe(View view){
+        final String topic = "dinu/bar";
+
+        MqttAndroidClient client;
+        client = connection.getClient();
+
+
         try {
+
             IMqttToken unsubToken = client.unsubscribe(topic);
+            ActionListener listener = new ActionListener(connection, ActionListener.Action.UNSUBSCRIBE, this.getApplicationContext());
+            unsubToken.setActionCallback(listener);
+            /*
             unsubToken.setActionCallback(new IMqttActionListener() {
                 @Override
                 public void onSuccess(IMqttToken asyncActionToken) {
@@ -140,8 +178,69 @@ public class MainActivity extends AppCompatActivity {
                     // did not had a subscription to the topic the unsubscribe action
                     // will be successfully
                 }
-            });
+            });*/
         } catch (MqttException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void disconnect(View view){
+        MqttAndroidClient client;
+        client = connection.getClient();
+
+        try {
+            IMqttToken disconToken = client.disconnect();
+            ActionListener listener = new ActionListener(connection, ActionListener.Action.DISCONNECT, this.getApplicationContext());
+            disconToken.setActionCallback(listener);
+            /*
+            disconToken.setActionCallback(new IMqttActionListener() {
+                @Override
+                public void onSuccess(IMqttToken asyncActionToken) {
+                    // we are now successfully disconnected
+                }
+
+                @Override
+                public void onFailure(IMqttToken asyncActionToken,
+                                      Throwable exception) {
+                    // something went wrong, but probably we are disconnected anyway
+                }
+            });*/
+        } catch (MqttException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void publish(View view){
+        String topic = "foo/bar";
+        String payload = "the payload";
+        byte[] encodedPayload = new byte[0];
+
+        MqttAndroidClient client;
+        client = connection.getClient();
+
+        try {
+            encodedPayload = payload.getBytes("UTF-8");
+            MqttMessage message = new MqttMessage(encodedPayload);
+            client.publish(topic, message);
+        } catch (UnsupportedEncodingException | MqttException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void publishRetained(View view){
+        String topic = "foo/bar";
+        String payload = "the payload";
+        byte[] encodedPayload = new byte[0];
+
+        MqttAndroidClient client;
+        client = connection.getClient();
+
+        try {
+            encodedPayload = payload.getBytes("UTF-8");
+            MqttMessage message = new MqttMessage(encodedPayload);
+            message.setRetained(true);
+            client.publish(topic, message);
+        } catch (UnsupportedEncodingException | MqttException e) {
             e.printStackTrace();
         }
     }
